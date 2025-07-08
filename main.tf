@@ -118,13 +118,14 @@ resource "aws_lambda_function" "myapp" {
 }
 
 # Lambda permissions for ALB
-resource "aws_lambda_permission" "alb_invoke" {
+resource "aws_lambda_permission" "allow_alb" {
   statement_id  = "AllowExecutionFromALB"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.myapp.function_name
   principal     = "elasticloadbalancing.amazonaws.com"
   source_arn    = aws_lb_target_group.alb_tg.arn
 }
+
 
 # ALB
 resource "aws_lb" "alb" {
