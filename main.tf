@@ -1,9 +1,11 @@
 terraform {
+  required_version = ">= 1.3.0"
+
   backend "s3" {
-    bucket         = "my-tfstate-bucket-${var.aws_account_id}"
-    key            = "state/terraform.tfstate"
-    region         = var.aws_region
-    dynamodb_table = "my-tfstate-lock-${var.aws_account_id}"
+    bucket         = "REPLACE_THIS_ON_FIRST_DEPLOY"
+    key            = "terraform/state/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "tfstate-lock"
     encrypt        = true
   }
 }
