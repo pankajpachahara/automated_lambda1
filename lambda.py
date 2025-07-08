@@ -20,17 +20,7 @@ client = OpenAI(
 
 # Step 3: Define Prompt
 prompt = """
-Requirement:
-Use Terraform to deploy a Node.js app to AWS Lambda using GitHub Actions (CI/CD pipeline). The pipeline should:
-- Create an S3 bucket and DynamoDB table for backend tfstate locking
-- Package & deploy Node.js app to AWS Lambda
-- Expose it via ALB URL (with target group & listener)
-- Create all required infra like IAM, Security Groups, Subnets, VPC
-- Generate GitHub workflow (deploy.yml) with `terraform init`, `plan`, `apply` on push to main
-- Create variables.tf and use best practices
-- Prevent .env from being pushed
-- Automate the whole setup including folders and file generation
-"""
+ You are an expert DevOps engineer. Based on the following requirement, generate all necessary files in properly fenced code blocks with appropriate language tags like hcl, js, yaml etc. ## Requirement: Use Terraform and GitHub Actions to automate deployment of a Node.js app to AWS Lambda. The pipeline should: - Create an S3 bucket and DynamoDB table to store the Terraform state and lock it - Create a VPC, public subnets, security groups, IAM roles and policies - Deploy the Node.js app as AWS Lambda function - Create an Application Load Balancer (ALB) that routes HTTP traffic to Lambda - Create a GitHub Actions workflow (`.github/workflows/deploy.yml`) to: - Install dependencies - Package the Node.js app into `lambda.zip` - Run Terraform init/plan/apply on push to `main` - Ensure `.env` is excluded using `.gitignore` - Organize the files in appropriate folders: - `backend-bootstrap/backend.tf` for state infra (S3 + DynamoDB) - `main.tf` and `variables.tf` in root for main infrastructure - `index.js` in `src/` to return "My name is pankaj" - `.github/workflows/deploy.yml` as GitHub Actions workflow - `.gitignore` to avoid pushing `.env` and `lambda.zip` Each section must be output in this format: ### backend-bootstrap/backend.tf hcl # HCL code here"""
 
 print("🔁 Sending prompt to OpenRouter...")
 
@@ -39,7 +29,7 @@ try:
     response = client.chat.completions.create(
         model="openai/gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens= 2300,
+        max_tokens= 1500,
     )
     reply = response.choices[0].message.content
     print("✅ AI response received.")
