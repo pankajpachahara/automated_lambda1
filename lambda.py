@@ -39,7 +39,7 @@ try:
     response = client.chat.completions.create(
         model="openai/gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens= 2900,
+        max_tokens= 2300,
     )
     reply = response.choices[0].message.content
     print("✅ AI response received.")
