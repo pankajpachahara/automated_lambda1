@@ -77,7 +77,6 @@ jobs:
         working-directory: ./src
         run: |
           # Create lambda.zip in the root directory (one level up from src)
-          # We no longer calculate SOURCE_CODE_HASH here; Terraform will do it from the zip file.
           zip -r ../lambda.zip .
           cd ../ # Move to the root directory where lambda.zip is located
           SOURCE_CODE_HASH=$(sha256sum lambda.zip | awk '{print $1}')
@@ -108,12 +107,8 @@ jobs:
 
       - name: Terraform Plan (Main Infrastructure)
         working-directory: ./ # Run plan in the root directory
-        # No -var="source_code_hash=..." or -var="lambda_zip_path=..." needed here
-        # Terraform's aws_lambda_function resource will use filebase64sha256("lambda.zip")
-        run: terraform plan
+        run: terraform plan -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}" # <--- ADD THIS LINE
 
       - name: Terraform Apply (Main Infrastructure)
         working-directory: ./ # Run apply in the root directory
-
-        # No -var="source_code_hash=..." or -var="lambda_zip_path=..." needed here
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}" # <--- ADD THIS LINE
