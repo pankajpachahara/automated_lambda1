@@ -1,9 +1,9 @@
 terraform {
-  required_version = ">= 1.3"
+  required_version = ">= 1.0.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -12,14 +12,8 @@ provider "aws" {
   region = var.aws_region
 }
 
-variable "aws_region" {
-  default = "us-east-1"
-}
-
-# Create S3 bucket for Terraform state storage
 resource "aws_s3_bucket" "tf_state" {
-  bucket = "myapp-terraform-state-${random_string.suffix.result}"
-  acl    = "private"
+  bucket = var.state_bucket_name
 
   versioning {
     enabled = true
@@ -38,15 +32,8 @@ resource "aws_s3_bucket" "tf_state" {
   }
 }
 
-resource "random_string" "suffix" {
-  length  = 6
-  upper   = false
-  special = false
-}
-
-# Create DynamoDB table for state locking
 resource "aws_dynamodb_table" "tf_lock" {
-  name         = "terraform-lock-table"
+  name         = var.locktable_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -54,12 +41,4 @@ resource "aws_dynamodb_table" "tf_lock" {
     name = "LockID"
     type = "S"
   }
-}
-
-output "s3_bucket" {
-  value = aws_s3_bucket.tf_state.id
-}
-
-output "dynamodb_table" {
-  value = aws_dynamodb_table.tf_lock.name
 }
