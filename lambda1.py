@@ -157,6 +157,7 @@ Ensure S3 bucket versioning and server-side encryption (AES256) are enabled.
 The DynamoDB table should be named `{DDB_LOCK_TABLE_NAME}` and have `LockID` as the primary key with PAY_PER_REQUEST billing mode.
 The S3 bucket should be named `{S3_STATE_BUCKET_NAME}`.
 The S3 bucket should also have `force_destroy = true` for easy cleanup in development.
+**Include Terraform output blocks for the S3 bucket name (named `terraform_state_bucket_name`) and the DynamoDB table name (named `terraform_lock_table_name`).**
 Output must be in this exact format:
 ### backend-bootstrap/backend.tf hcl
 ```hcl

@@ -27,34 +27,32 @@ jobs:
       - name: Package Lambda function
         working-directory: ./src
         run: |
-          SOURCE_CODE_HASH=$(sha256sum index.js package-lock.json | awk '{print $1}')
-          echo "SOURCE_CODE_HASH=${SOURCE_CODE_HASH}" >> $GITHUB_ENV
-          zip -r ../lambda.zip .
+          zip -r lambda.zip .
+          echo "::set-output name=sha::$(shasum -a 256 lambda.zip | cut -d' ' -f1)"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRoleForDeployment
-          role-session-name: GitHubActionsDeploymentSession
+          role-session-name: GitHubActionsSession
+          aws-region: ap-south-1
 
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" -backend-config="key=terraform.tfstate" -backend-config="region=ap-south-1" -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+        run: terraform init -backend-config="region=ap-south-1" -backend-config="dynamodb_table=terraform-state-lock"
 
       - name: Terraform Plan
         working-directory: ./terraform
-        run: terraform plan -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}" -var="lambda_zip_path=../lambda.zip"
+        run: terraform plan -var="lambda_zip_path=../src/lambda.zip" -var="source_code_hash=${{ steps.package.outputs.sha }}"
 
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}" -var="lambda_zip_path=../lambda.zip"
-
-      # Alternative approach using aws s3 cp if not using Terraform to manage the zip upload:
-      # - name: Upload Lambda Zip to S3
-      #   working-directory: ./
-      #   run: aws s3 cp lambda.zip s3://${{ secrets.LAMBDA_BUCKET_NAME }}/lambda.zip
+        run: terraform apply -auto-approve -var="lambda_zip_path=../src/lambda.zip" -var="source_code_hash=${{ steps.package.outputs.sha }}"
+# Alternatively, upload the zip file directly to S3 within the workflow if your Terraform config doesn't handle it.
+#      - name: Upload to S3
+#        working-directory: ./src
+#        run: |
+#          aws s3 cp lambda.zip s3://${{ terraform.outputs.lambda_bucket_name }}/lambda.zip
