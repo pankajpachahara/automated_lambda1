@@ -1,3 +1,5 @@
+# main.tf
+
 terraform {
   required_providers {
     aws = {
@@ -7,10 +9,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "pankaj-devops-lambda-tfstate-c0279ca3"
-    key    = "terraform.tfstate"
-    region = "ap-south-1" # Keep this consistent with the state bucket region
-    dynamodb_table = "pankaj-devops-lambda-tf-lock-c0279ca3"
+    bucket         = "pankaj-devops-lambda-tfstate-c0279ca3" # Ensure this matches your S3 state bucket
+    key            = "terraform.tfstate"
+    region         = "ap-south-1" # Keep this consistent with the state bucket region
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-c0279ca3" # Ensure this matches your DynamoDB lock table
   }
 }
 
@@ -29,18 +31,18 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "public_1" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = data.aws_availability_zones.available.names[0]
   tags = {
     Name = "${var.project_name}-${var.environment}-public-subnet-1"
   }
 }
 
 resource "aws_subnet" "public_2" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[1]
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = data.aws_availability_zones.available.names[1]
   tags = {
     Name = "${var.project_name}-${var.environment}-public-subnet-2"
   }
@@ -84,9 +86,9 @@ resource "aws_security_group" "lambda_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
 
@@ -183,7 +185,7 @@ EOF
 
 resource "aws_s3_bucket" "lambda_code_bucket" {
   bucket = "pankaj-devops-lambda-lambda-code-${data.aws_caller_identity.current.account_id}"
-  acl    = "private"
+  acl    = "private" # This will produce a deprecation warning, consider using aws_s3_bucket_acl resource
 
   tags = {
     Name = "${var.project_name}-${var.environment}-lambda-bucket"
@@ -192,25 +194,28 @@ resource "aws_s3_bucket" "lambda_code_bucket" {
 
 
 resource "aws_lambda_function" "lambda_function" {
-  filename         = "./lambda.zip"
   function_name    = "${var.project_name}-lambda-function"
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
-  source_code_hash =  var.source_code_hash # Placeholder, update in CI/CD
   runtime          = "nodejs18.x"
   timeout          = 30
   memory_size      = 128
+
+  # Specify the local zip file as the source code
+  filename         = "./lambda.zip"
+  source_code_hash = var.source_code_hash
+
   vpc_config {
     subnet_ids         = [aws_subnet.public_1.id, aws_subnet.public_2.id]
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
-  s3_bucket = aws_s3_bucket.lambda_code_bucket.id
-  s3_key    = "lambda.zip"
+
+  # REMOVED: s3_bucket and s3_key attributes to resolve conflict
 }
 
 
 resource "aws_lb" "alb" {
-  name               = "pankaj-devops-lambda-alb"
+  name               = "${var.project_name}-${var.environment}-alb" # Used project_name and environment for uniqueness
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
@@ -223,19 +228,18 @@ resource "aws_lb" "alb" {
 
 
 resource "aws_lb_target_group" "lambda_tg" {
-  name        = "${var.project_name}-lambda-tg"
-  #port        = 80
+  name        = "${var.project_name}-lambda-tg" # Used project_name for uniqueness
   protocol    = "HTTP"
   target_type = "lambda"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = aws_vpc.main.id # For VPC context, though Lambda TG doesn't use subnets/ports
 
+  # REMOVED: port = 80 as it's not applicable for target_type = "lambda"
 }
 
 resource "aws_lb_listener" "front_end" {
   load_balancer_arn = aws_lb.alb.arn
   port              = "80"
   protocol          = "HTTP"
-
 
   default_action {
     target_group_arn = aws_lb_target_group.lambda_tg.arn
