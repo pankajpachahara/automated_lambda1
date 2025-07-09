@@ -1,16 +1,16 @@
 terraform {
-  backend "s3" {
-    bucket = "pankaj-devops-lambda-tfstate-6f4b02f9"
-    key    = "terraform.tfstate"
-    region = "ap-south-1" # Keep this consistent with the state bucket region
-    dynamodb_table = "pankaj-devops-lambda-tf-lock-6f4b02f9"
-  }
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0" # Or your preferred version
+      version = "~> 5.0"
     }
+  }
+
+  backend "s3" {
+    bucket = "pankaj-devops-lambda-tfstate-c0279ca3"
+    key    = "terraform.tfstate"
+    region = "ap-south-1" # Keep this consistent with the state bucket region
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-c0279ca3"
   }
 }
 
@@ -18,7 +18,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_caller_identity" current {}
+data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "main" {
@@ -47,7 +47,6 @@ resource "aws_subnet" "public_2" {
 }
 
 
-
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
   tags = {
@@ -55,7 +54,8 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
-resource "aws_route_table" "public_route_table" {
+
+resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   route {
@@ -68,16 +68,15 @@ resource "aws_route_table" "public_route_table" {
   }
 }
 
-resource "aws_route_table_association" "public_subnet_1_association" {
+resource "aws_route_table_association" "public_1" {
   subnet_id      = aws_subnet.public_1.id
-  route_table_id = aws_route_table.public_route_table.id
+  route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table_association" "public_subnet_2_association" {
+resource "aws_route_table_association" "public_2" {
   subnet_id      = aws_subnet.public_2.id
-  route_table_id = aws_route_table.public_route_table.id
+  route_table_id = aws_route_table.public.id
 }
-
 
 resource "aws_security_group" "lambda_sg" {
   name        = "${var.project_name}-${var.environment}-lambda-sg"
@@ -86,16 +85,17 @@ resource "aws_security_group" "lambda_sg" {
 
   ingress {
     from_port = 443
-    to_port   = 443
-    protocol  = "tcp"
+    to_port = 443
+    protocol = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
     from_port        = 0
     to_port          = 0
-    protocol        = "-1"
+    protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   tags = {
@@ -111,16 +111,19 @@ resource "aws_security_group" "alb_sg" {
   ingress {
     from_port        = 80
     to_port          = 80
-    protocol        = "tcp"
+    protocol         = "tcp"
     cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
     from_port        = 0
     to_port          = 0
-    protocol        = "-1"
+    protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
+
   tags = {
     Name = "${var.project_name}-${var.environment}-alb-sg"
   }
@@ -146,47 +149,41 @@ resource "aws_iam_role" "lambda_role" {
 EOF
 }
 
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "${var.project_name}-${var.environment}-lambda-policy"
+  role = aws_iam_role.lambda_role.id
 
-resource "aws_iam_policy" "lambda_policy" {
-  name        = "${var.project_name}-${var.environment}-lambda-policy"
-  description = "Policy for Lambda function execution"
-
-  policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [
-      {
-        "Effect" : "Allow",
-        "Action" : [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ],
-        "Resource" : "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
-      },
-      {
-        "Effect" : "Allow",
-        "Action" : [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
-        ],
-        "Resource" : "*"
-      }
-    ]
-  })
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
 }
 
 
-resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = aws_iam_policy.lambda_policy.arn
-}
-
-resource "aws_s3_bucket" "lambda_code_bucket" { # Renamed for clarity
+resource "aws_s3_bucket" "lambda_code_bucket" {
   bucket = "pankaj-devops-lambda-lambda-code-${data.aws_caller_identity.current.account_id}"
   acl    = "private"
-
-  force_destroy = true # Use with caution in production
 
   tags = {
     Name = "${var.project_name}-${var.environment}-lambda-bucket"
@@ -194,22 +191,21 @@ resource "aws_s3_bucket" "lambda_code_bucket" { # Renamed for clarity
 }
 
 
-resource "aws_lambda_function" "lambda" {
-  function_name = "pankaj-devops-lambda-nodejs-app"
-  handler       = "index.handler"
-  runtime       = "nodejs18.x"
-  timeout       = 30
-  memory_size   = 128
-  role          = aws_iam_role.lambda_role.arn
+resource "aws_lambda_function" "lambda_function" {
+  filename         = "lambda.zip" # Replace with your actual zip file name
+  function_name    = "pankaj-devops-lambda-nodejs-app"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  source_code_hash = filebase64sha256("lambda.zip") # Placeholder, update in CI/CD
+  runtime          = "nodejs18.x"
+  timeout          = 30
+  memory_size      = 128
   vpc_config {
     subnet_ids         = [aws_subnet.public_1.id, aws_subnet.public_2.id]
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
   s3_bucket = aws_s3_bucket.lambda_code_bucket.id
   s3_key    = "lambda.zip"
-
-  source_code_hash = filebase64sha256("src/lambda.zip") # Placeholder, update in CI/CD
-
 }
 
 
@@ -225,6 +221,7 @@ resource "aws_lb" "alb" {
   }
 }
 
+
 resource "aws_lb_target_group" "lambda_tg" {
   name        = "lambda_tg"
   port        = 80
@@ -239,16 +236,18 @@ resource "aws_lb_listener" "front_end" {
   port              = "80"
   protocol          = "HTTP"
 
+
   default_action {
     target_group_arn = aws_lb_target_group.lambda_tg.arn
     type             = "forward"
   }
 }
 
+
 resource "aws_lambda_permission" "allow_alb" {
   statement_id  = "AllowExecutionFromALB"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda.function_name
+  function_name = aws_lambda_function.lambda_function.function_name
   principal     = "elasticloadbalancing.amazonaws.com"
   source_arn    = aws_lb_listener.front_end.arn
 }
