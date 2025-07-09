@@ -12,7 +12,7 @@ terraform {
     bucket         = "pankaj-devops-lambda-tfstate-ea8d4e33" # Ensure this matches your S3 state bucket
     key            = "terraform.tfstate"
     region         = "ap-south-1" # Keep this consistent with the state bucket region
-    dynamodb_table = "pankaj-devops-lambda-tf-lock-ea8d4e3" # Ensure this matches your DynamoDB lock table
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-ea8d4e33" # Ensure this matches your DynamoDB lock table
   }
 }
 
