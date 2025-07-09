@@ -110,7 +110,7 @@ jobs:
         run: terraform plan
 
       - name: Terraform Apply (Main Infrastructure)
-        working-directory: ./ # Run apply in the root directoryy
+        working-directory: ./ # Run apply in the root directory
 
         # No -var="source_code_hash=..." or -var="lambda_zip_path=..." needed here
         run: terraform apply -auto-approve
