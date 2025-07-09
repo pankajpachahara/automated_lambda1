@@ -9,7 +9,7 @@ load_dotenv()
 api_key = os.getenv("OPENROUTER_API_KEY")
 
 if not api_key:
-    print("❌ API key not found. Check .env file.")
+    print(" API key not found. Check .env file.")
     exit()
 
 # Step 2: Initialize OpenRouter Client
@@ -20,9 +20,24 @@ client = OpenAI(
 
 # Step 3: Define Prompt
 prompt = """
- You are an expert DevOps engineer. Based on the following requirement, generate all necessary files in properly fenced code blocks with appropriate language tags like hcl, js, yaml etc. ## Requirement: Use Terraform and GitHub Actions to automate deployment of a Node.js app to AWS Lambda. The pipeline should: - Create an S3 bucket and DynamoDB table to store the Terraform state and lock it - Create a VPC, public subnets, security groups, IAM roles and policies - Deploy the Node.js app as AWS Lambda function - Create an Application Load Balancer (ALB) that routes HTTP traffic to Lambda - Create a GitHub Actions workflow (`.github/workflows/deploy.yml`) to: - Install dependencies - Package the Node.js app into `lambda.zip` - Run Terraform init/plan/apply on push to `main` - Ensure `.env` is excluded using `.gitignore` - Organize the files in appropriate folders: - `backend-bootstrap/backend.tf` for state infra (S3 + DynamoDB) - `main.tf` and `variables.tf` in root for main infrastructure - `index.js` in `src/` to return "My name is pankaj" - `.github/workflows/deploy.yml` as GitHub Actions workflow - `.gitignore` to avoid pushing `.env` and `lambda.zip` Each section must be output in this format: ### backend-bootstrap/backend.tf hcl # HCL code here"""
+ You are an expert DevOps engineer.
+ Based on the following requirement,
+ generate all necessary files in properly fenced code blocks with appropriate language tags
+ like hcl, js, yaml etc.
+ ## Requirement: Use Terraform and GitHub Actions to automate deployment of a Node.js app to AWS Lambda.
+ #The pipeline should: - Create an S3 bucket and DynamoDB table to store the Terraform state
+ #and lock it - Create a VPC, public subnets, security groups, IAM roles and policies - 
+ #Deploy the Node.js app as AWS Lambda function - Create an Application Load Balancer (ALB) that routes HTTP traffic to Lambda - 
+ #reate a GitHub Actions workflow (`.github/workflows/deploy.yml`) to: - 
+ #Install dependencies - Package the Node.js app into `lambda.zip` - 
+ # Run Terraform init/plan/apply on push to `main` - Ensure `.env` is excluded using `.gitignore` - 
+ # Organize the files in appropriate folders: - `backend-bootstrap/backend.tf` for state infra (S3 + DynamoDB)
+ #  - `main.tf` and `variables.tf` in root for main infrastructure - `index.js` in `src/` to return "My name is pankaj" - `
+ # .github/workflows/deploy.yml` as GitHub Actions workflow - `.gitignore` to avoid pushing `.env` and `lambda.zip` 
+ # Each section must be output in this format: ### backend-bootstrap/backend.tf hcl 
+ # HCL code here"""
 
-print("🔁 Sending prompt to OpenRouter...")
+print("Sending prompt to OpenRouter...")
 
 # Step 4: Call OpenRouter
 try:
@@ -32,9 +47,9 @@ try:
         max_tokens= 1500,
     )
     reply = response.choices[0].message.content
-    print("✅ AI response received.")
+    print("AI response received.")
 except Exception as e:
-    print("❌ Error while getting AI response:", e)
+    print("Error while getting AI response:", e)
     exit()
 
 # Step 5: Create folders and files
@@ -53,17 +68,17 @@ files = {
 for path, content in files.items():
     with open(path, "w") as f:
         f.write(content)
-        print(f"✅ Created {path}")
+        print(f"Created {path}")
 
 # Step 6: Terraform init + apply for backend only
-print("⚙️ Running Terraform backend init/apply...")
+print("Running Terraform backend init/apply...")
 os.chdir("backend-bootstrap")
 subprocess.run(["terraform", "init"])
 subprocess.run(["terraform", "apply", "-auto-approve"])
 os.chdir("..")
 
 # Step 7: Initialize Git & Push
-print("📦 Initializing Git repo...")
+print("Initializing Git repo...")
 if not os.path.isdir(".git"):
     subprocess.run(["git", "init"])
 
@@ -77,4 +92,4 @@ GIT_REMOTE = "https://github.com/pankajpachahara/automated_lambda.git"
 subprocess.run(["git", "remote", "add", "origin", GIT_REMOTE])
 subprocess.run(["git", "push", "-u", "origin", "main"])
 
-print("🚀 All done! CI/CD will trigger from GitHub.")
+print("CI/CD will trigger from GitHub.")
