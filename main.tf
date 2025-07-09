@@ -9,10 +9,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "pankaj-devops-lambda-tfstate-c0279ca3" # Ensure this matches your S3 state bucket
+    bucket         = "pankaj-devops-lambda-tfstate-ea8d4e33" # Ensure this matches your S3 state bucket
     key            = "terraform.tfstate"
     region         = "ap-south-1" # Keep this consistent with the state bucket region
-    dynamodb_table = "pankaj-devops-lambda-tf-lock-c0279ca3" # Ensure this matches your DynamoDB lock table
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-ea8d4e3" # Ensure this matches your DynamoDB lock table
   }
 }
 
@@ -86,8 +86,8 @@ resource "aws_security_group" "lambda_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 443
-    to_port         = 443
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }

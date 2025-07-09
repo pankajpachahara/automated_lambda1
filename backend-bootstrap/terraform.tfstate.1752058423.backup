@@ -1,18 +1,9 @@
 {
   "version": 4,
   "terraform_version": "1.8.4",
-  "serial": 18,
+  "serial": 7,
   "lineage": "e39f7ee9-8baf-8bc8-5209-ab48b70c80a9",
-  "outputs": {
-    "terraform_lock_table_name": {
-      "value": "pankaj-devops-lambda-tf-lock-ea8d4e33",
-      "type": "string"
-    },
-    "terraform_state_bucket_name": {
-      "value": "pankaj-devops-lambda-tfstate-ea8d4e33",
-      "type": "string"
-    }
-  },
+  "outputs": {},
   "resources": [
     {
       "mode": "managed",
@@ -59,7 +50,7 @@
             "stream_label": "",
             "stream_view_type": "",
             "table_class": "STANDARD",
-            "tags": null,
+            "tags": {},
             "tags_all": {},
             "timeouts": null,
             "ttl": [
@@ -93,7 +84,7 @@
             "bucket_region": "ap-south-1",
             "bucket_regional_domain_name": "pankaj-devops-lambda-tfstate-ea8d4e33.s3.ap-south-1.amazonaws.com",
             "cors_rule": [],
-            "force_destroy": true,
+            "force_destroy": false,
             "grant": [
               {
                 "id": "f57aa422836d1e2124f9250c827cfd9ea1b2bead54878f5ae8a0bee0c49574e1",
@@ -129,7 +120,7 @@
                 ]
               }
             ],
-            "tags": null,
+            "tags": {},
             "tags_all": {},
             "timeouts": null,
             "versioning": [
@@ -143,7 +134,7 @@
             "website_endpoint": null
           },
           "sensitive_attributes": [],
-          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjM2MDAwMDAwMDAwMDAsInJlYWQiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH19"
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjM2MDAwMDAwMDAwMDAsInJlYWQiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH0sInNjaGVtYV92ZXJzaW9uIjoiMCJ9"
         }
       ]
     },
