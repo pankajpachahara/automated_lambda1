@@ -223,7 +223,7 @@ resource "aws_lb" "alb" {
 
 
 resource "aws_lb_target_group" "lambda_tg" {
-  name        = "lambda_tg"
+  name        = "${var.project_name}-lambda-tg"
   port        = 80
   protocol    = "HTTP"
   target_type = "lambda"
