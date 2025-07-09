@@ -1,4 +1,4 @@
-# 1 main.tf
+# 11 main.tf
 
 terraform {
   required_providers {
@@ -198,7 +198,7 @@ resource "aws_lambda_function" "lambda_function" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
   runtime          = "nodejs18.x"
-  timeout          = 30
+  timeout          = 120
   memory_size      = 128
 
   # Specify the local zip file as the source code
