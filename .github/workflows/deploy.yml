@@ -79,6 +79,9 @@ jobs:
           # Create lambda.zip in the root directory (one level up from src)
           # We no longer calculate SOURCE_CODE_HASH here; Terraform will do it from the zip file.
           zip -r ../lambda.zip .
+          cd ../ # Move to the root directory where lambda.zip is located
+          SOURCE_CODE_HASH=$(sha256sum lambda.zip | awk '{print $1}')
+          echo "SOURCE_CODE_HASH=${SOURCE_CODE_HASH}" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
