@@ -192,11 +192,11 @@ resource "aws_s3_bucket" "lambda_code_bucket" {
 
 
 resource "aws_lambda_function" "lambda_function" {
-  filename         = "lambda.zip" # Replace with your actual zip file name
-  function_name    = "pankaj-devops-lambda-nodejs-app"
+  filename         = "./lambda.zip"
+  function_name    = "${var.project_name}-lambda-function"
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
-  source_code_hash = filebase64sha256("lambda.zip") # Placeholder, update in CI/CD
+  source_code_hash =  var.source_code_hash # Placeholder, update in CI/CD
   runtime          = "nodejs18.x"
   timeout          = 30
   memory_size      = 128
@@ -224,7 +224,7 @@ resource "aws_lb" "alb" {
 
 resource "aws_lb_target_group" "lambda_tg" {
   name        = "${var.project_name}-lambda-tg"
-  port        = 80
+  #port        = 80
   protocol    = "HTTP"
   target_type = "lambda"
   vpc_id      = aws_vpc.main.id
