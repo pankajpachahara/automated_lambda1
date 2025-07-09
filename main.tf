@@ -1,45 +1,282 @@
-module "backend_bootstrap" {
-  source = "./backend-bootstrap"
-  providers = {
-    aws = aws
+terraform {
+  backend "s3" {
+    bucket = "pankaj-devops-lambda-tfstate-60180f94"
+    key    = "terraform.tfstate"
+    region = "ap-south-1" # Keep this consistent with the state bucket region
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-60180f94"
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0" # Or your preferred version
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
 
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
-resource "aws_dynamodb_table" "tfstate_lock" {
-  name           = module.backend_bootstrap.dynamodb_table_name
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "LockID"
-  attribute {
-    name = "LockID"
-    type = "S"
+data "aws_caller_identity" "current" {}
+data "aws_availability_zones" "available" {}
+
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "${var.project_name}-${var.environment}-vpc"
   }
 }
 
-resource "aws_s3_bucket" "tfstate_bucket" {
-  bucket = module.backend_bootstrap.s3_bucket_name
+resource "aws_subnet" "public_1" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = data.aws_availability_zones.available.names[0]
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-subnet-1"
+  }
+}
+
+resource "aws_subnet" "public_2" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = data.aws_availability_zones.available.names[1]
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-subnet-2"
+  }
+}
+
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.project_name}-${var.environment}-igw"
+  }
+}
+
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-route-table"
+  }
+}
+
+resource "aws_route_table_association" "public_1" {
+  subnet_id      = aws_subnet.public_1.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+resource "aws_route_table_association" "public_2" {
+  subnet_id      = aws_subnet.public_2.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+resource "aws_security_group" "lambda_sg" {
+  name        = "${var.project_name}-${var.environment}-lambda-sg"
+  description = "Security group for Lambda function"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port = 443 # ALB uses 443 for Lambda targets
+    to_port   = 443
+    protocol  = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol        = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-lambda-sg"
+  }
+}
+
+resource "aws_security_group" "alb_sg" {
+  name        = "${var.project_name}-${var.environment}-alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port        = 80
+    to_port          = 80
+    protocol        = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol        = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  }
+}
+
+
+resource "aws_iam_role" "lambda_role" {
+  name = "${var.project_name}-${var.environment}-lambda-role"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_policy" "lambda_policy" {
+  name        = "${var.project_name}-${var.environment}-lambda-policy"
+  description = "Policy for Lambda function execution"
+
+ policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeNetworkInterfaces"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_policy.arn
+}
+
+
+resource "aws_s3_bucket" "lambda_bucket" { # Renamed for clarity
+  bucket = "pankaj-devops-lambda-lambda-code-${data.aws_caller_identity.current.account_id}"
   acl    = "private"
 
- # Enable server-side encryption
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  versioning {
-    enabled = true
-  }
-
- lifecycle {
-    prevent_destroy = true
+  tags = {
+    Name = "${var.project_name}-${var.environment}-lambda-bucket"
   }
 }
 
-# ... rest of your infrastructure (VPC, subnets, lambda, ALB etc.)
-# will be added to this file.
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_dir  = "src/" # Assuming your lambda code is in 'src' directory
+  output_path = "lambda.zip"
+}
+
+
+resource "aws_lambda_function" "lambda_function" {
+  function_name = "pankaj-devops-lambda-nodejs-app"
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
+  timeout       = 30
+  memory_size   = 128
+  role          = aws_iam_role.lambda_role.arn
+  vpc_config {
+    subnet_ids         = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+
+  s3_bucket = aws_s3_bucket.lambda_bucket.id
+  s3_key    = "lambda.zip"
+
+
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+
+}
+
+
+resource "aws_lb" "alb" {
+  name               = "pankaj-devops-lambda-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb"
+  }
+}
+
+
+resource "aws_lb_target_group" "lambda_tg" {
+  name        = "lambda_tg"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "lambda"
+  vpc_id      = aws_vpc.main.id
+
+}
+
+resource "aws_lb_listener" "front_end" {
+  load_balancer_arn = aws_lb.alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+
+  default_action {
+    target_group_arn = aws_lb_target_group.lambda_tg.arn
+    type             = "forward"
+  }
+}
+
+
+resource "aws_lambda_permission" "alb_invoke_lambda" {
+  statement_id  = "AllowExecutionFromALB"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda_function.function_name
+  principal     = "elasticloadbalancing.amazonaws.com"
+  source_arn    = aws_lb_listener.front_end.arn
+}
+
+resource "aws_lb_target_group_attachment" "lambda_attachment" {
+  target_group_arn = aws_lb_target_group.lambda_tg.arn
+  target_id        = aws_lambda_function.lambda_function.arn
+}
+
+
+
+output "alb_dns_name" {
+  value = aws_lb.alb.dns_name
+}

@@ -1,4 +1,14 @@
-variable "region" {
-  type = string
-  default = "us-west-2"
+variable "aws_region" {
+  type    = string
+  default = "ap-south-1"
+}
+
+variable "project_name" {
+  type    = string
+  default = "pankaj-devops-lambda"
+}
+
+variable "environment" {
+  type    = string
+  default = "development"
 }
