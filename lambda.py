@@ -1,55 +1,59 @@
 import os
 import subprocess
 import time
-from openai import OpenAI
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # Step 1: Load .env
 load_dotenv()
-api_key = os.getenv("OPENROUTER_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-    print(" API key not found. Check .env file.")
+    print("GEMINI_API_KEY not found. Please check your .env file.")
     exit()
 
-# Step 2: Initialize OpenRouter Client
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=api_key,
-)
+# Step 2: Configure Gemini
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 # Step 3: Define Prompt
 prompt = """
- You are an expert DevOps engineer.
- Based on the following requirement,
- generate all necessary files in properly fenced code blocks with appropriate language tags
- like hcl, js, yaml etc.
- ## Requirement: Use Terraform and GitHub Actions to automate deployment of a Node.js app to AWS Lambda.
- #The pipeline should: - Create an S3 bucket and DynamoDB table to store the Terraform state
- #and lock it - Create a VPC, public subnets, security groups, IAM roles and policies - 
- #Deploy the Node.js app as AWS Lambda function - Create an Application Load Balancer (ALB) that routes HTTP traffic to Lambda - 
- #reate a GitHub Actions workflow (`.github/workflows/deploy.yml`) to: - 
- #Install dependencies - Package the Node.js app into `lambda.zip` - 
- # Run Terraform init/plan/apply on push to `main` - Ensure `.env` is excluded using `.gitignore` - 
- # Organize the files in appropriate folders: - `backend-bootstrap/backend.tf` for state infra (S3 + DynamoDB)
- #  - `main.tf` and `variables.tf` in root for main infrastructure - `index.js` in `src/` to return "My name is pankaj" - `
- # .github/workflows/deploy.yml` as GitHub Actions workflow - `.gitignore` to avoid pushing `.env` and `lambda.zip` 
- # Each section must be output in this format: ### backend-bootstrap/backend.tf hcl 
- # HCL code here"""
+You are an expert DevOps engineer.
+Based on the following requirement,
+generate all necessary files in properly fenced code blocks with appropriate language tags like hcl, js, yaml etc.
 
-print("Sending prompt to OpenRouter...")
+## Requirement:
+Use Terraform and GitHub Actions to automate deployment of a Node.js app to AWS Lambda.
+- Create an S3 bucket and DynamoDB table to store the Terraform state and lock it
+- Create a VPC, public subnets, security groups, IAM roles and policies
+- Deploy the Node.js app as AWS Lambda function
+- Create an Application Load Balancer (ALB) that routes HTTP traffic to Lambda
+- Create a GitHub Actions workflow (.github/workflows/deploy.yml) to:
+  - Install dependencies
+  - Package the Node.js app into lambda.zip
+  - Run Terraform init/plan/apply on push to main
+- Ensure .env is excluded using .gitignore
+- Organize the files in appropriate folders:
+  - backend-bootstrap/backend.tf
+  - main.tf and variables.tf in root
+  - index.js in src/ to return "My name is pankaj"
+  - .github/workflows/deploy.yml
+  - .gitignore
 
-# Step 4: Call OpenRouter
+Each section must be output in this format:
+### backend-bootstrap/backend.tf hcl
+<code>
+"""
+
+print("Sending prompt to Gemini...")
+
+# Step 4: Call Gemini
 try:
-    response = client.chat.completions.create(
-        model="openai/gpt-4.1",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens= 900,
-    )
-    reply = response.choices[0].message.content
+    response = model.generate_content(prompt)
+    reply = response.text
     print("AI response received.")
 except Exception as e:
-    print("Error while getting AI response:", e)
+    print("Error while getting Gemini response:", e)
     exit()
 
 # Step 5: Create folders and files
@@ -86,9 +90,8 @@ subprocess.run(["git", "add", "."])
 subprocess.run(["git", "commit", "-m", "AI-generated Lambda deployment infra"])
 subprocess.run(["git", "branch", "-M", "main"])
 
-# Replace this with your GitHub repo
 GIT_REMOTE = "https://github.com/pankajpachahara/automated_lambda.git"
-
+subprocess.run(["git", "remote", "remove", "origin"], stderr=subprocess.DEVNULL)
 subprocess.run(["git", "remote", "add", "origin", GIT_REMOTE])
 subprocess.run(["git", "push", "-u", "origin", "main"])
 
