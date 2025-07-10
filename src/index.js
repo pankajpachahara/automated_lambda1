@@ -4,6 +4,6 @@ exports.handler = async (event) => {
     headers: {
       "Content-Type": "text/plain"
     },
-    body: "Mera naam Lambda hai! Aap sab kaise hain. Mein shubham loda hoon",
+    body: "Mera naam Lambda hai! Aap sab kaise hain. CloudTechner me aapka swagat hai",
   };
 };
