@@ -1,117 +1,77 @@
-# .github/workflows/deploy.yml
-name: Deploy to AWS
+name: Terraform CD Pipeline
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
-  id-token: write # Required for OIDC
-  contents: read  # Required for actions/checkout and reading repo content
+  id-token: write
+  contents: read
 
 jobs:
-  # Job 1: Deploy Terraform Backend (S3 bucket and DynamoDB table)
   backend_deploy:
+    name: Terraform Backend Deployment
     runs-on: ubuntu-latest
-    outputs:
-      s3_bucket_name: ${{ steps.get_bucket_name.outputs.name }}
-      dynamodb_table_name: ${{ steps.get_table_name.outputs.name }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
-
-      - name: Configure AWS Credentials (for backend creation)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRoleForDeployment
-          role-session-name: BackendDeploymentSession
+          role-to-assume: arn:aws:iam::897297237979:role/GitHubOIDCRole
+          role-session-name: GitHubActionsSession
           aws-region: ap-south-1
 
-      - name: Terraform Init (Backend Bootstrap)
-        working-directory: ./backend-bootstrap
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
+
+      - name: Terraform Init (Backend)
         run: terraform init
+        working-directory: backend
 
-      - name: Terraform Apply (Backend Bootstrap)
-        working-directory: ./backend-bootstrap
+      - name: Terraform Plan (Backend)
+        run: terraform plan
+        working-directory: backend
+
+      - name: Terraform Apply (Backend)
         run: terraform apply -auto-approve
+        working-directory: backend
 
-      - name: Get S3 Bucket Name
-        id: get_bucket_name
-        working-directory: ./backend-bootstrap
-        run: echo "name=$(terraform output -raw terraform_state_bucket_name)" >> "$GITHUB_OUTPUT"
-      - name: Get DynamoDB Table Name
-        id: get_table_name
-        working-directory: ./backend-bootstrap
-        run: echo "name=$(terraform output -raw terraform_lock_table_name)" >> "$GITHUB_OUTPUT"
-
-  # Job 2: Deploy Main Infrastructure (VPC, Lambda, ALB)
   main_infra_deploy:
+    name: Terraform Main Infrastructure Deployment
     runs-on: ubuntu-latest
-    needs: [backend_deploy]
+    needs: backend_deploy
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18.x
-
-      # --- START OF MODIFICATION ---
-      - name: Generate package-lock.json if missing (for setup-node)
-        working-directory: ./src
-        run: |
-          if [ ! -f package-lock.json ]; then
-            echo "package-lock.json not found, generating it..."
-            npm install --package-lock-only
-          else
-            echo "package-lock.json already exists."
-          fi
-      # --- END OF MODIFICATION ---
-
-      - name: Install Node.js dependencies
-        working-directory: ./src
-        run: npm install
-
-      - name: Package Lambda function
-        working-directory: ./src
-        run: |
-          zip -r ../lambda.zip .
-          cd ../
-          SOURCE_CODE_HASH=$(sha256sum lambda.zip | awk '{print $1}')
-          echo "SOURCE_CODE_HASH=${SOURCE_CODE_HASH}" >> $GITHUB_ENV
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
-
-      - name: Configure AWS Credentials (for main infra deployment)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRoleForDeployment
-          role-session-name: MainInfraDeploymentSession
+          role-to-assume: arn:aws:iam::897297237979:role/GitHubOIDCRole
+          role-session-name: GitHubActionsSession
           aws-region: ap-south-1
 
-      - name: Terraform Init (Main Infrastructure)
-        working-directory: ./
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ needs.backend_deploy.outputs.s3_bucket_name }}" \
-            -backend-config="key=main-infra.tfstate" \
-            -backend-config="region=ap-south-1" \
-            -backend-config="dynamodb_table=${{ needs.backend_deploy.outputs.dynamodb_table_name }}"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.2
 
-      - name: Terraform Plan (Main Infrastructure)
-        working-directory: ./
-        run: terraform plan -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}"
+      - name: Terraform Init (Main Infra)
+        run: terraform init
+        working-directory: main
 
-      - name: Terraform Apply (Main Infrastructure)
-        working-directory: ./
-        run: terraform apply -auto-approve -var="source_code_hash=${{ env.SOURCE_CODE_HASH }}"
+      - name: Terraform Plan (Main Infra)
+        run: terraform plan
+        working-directory: main
+
+      - name: Terraform Apply (Main Infra)
+        run: terraform apply -auto-approve
+        working-directory: main
