@@ -28,7 +28,7 @@ generation_config = genai.types.GenerationConfig(
 PROJECT_NAME = "pankaj-devops-lambda"
 AWS_REGION = "ap-south-1"
 LAMBDA_RUNTIME = "nodejs18.x"
-GITHUB_REPO_URL = "https://github.com/pankajpachahara/automated_lambda1.git"  # Update this to your repo
+GITHUB_REPO_URL = "https://github.com/pankajpachahara/automated_lambda1"  # Update this to your repo
 
 # Generate a random hex suffix for unique bucket/table names
 RANDOM_HEX = str(uuid.uuid4())[:8]
