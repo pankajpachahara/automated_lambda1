@@ -1,3 +1,5 @@
+# 1 main.tf
+
 terraform {
   required_providers {
     aws = {
@@ -7,10 +9,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "pankaj-devops-lambda-tfstate-ea8d4e33"
-    key    = "terraform.tfstate"
-    region = "ap-south-1"
-    # ❌ Removed: dynamodb_table = ...
+    bucket         = "pankaj-devops-lambda-tfstate-ea8d4e33" # Ensure this matches your S3 state bucket
+    key            = "terraform.tfstate"
+    region         = "ap-south-1" # Keep this consistent with the state bucket region
+    dynamodb_table = "pankaj-devops-lambda-tf-lock-ea8d4e33" # Ensure this matches your DynamoDB lock table
   }
 }
 
@@ -46,12 +48,14 @@ resource "aws_subnet" "public_2" {
   }
 }
 
+
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
   tags = {
     Name = "${var.project_name}-${var.environment}-igw"
   }
 }
+
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -81,6 +85,13 @@ resource "aws_security_group" "lambda_sg" {
   description = "Security group for Lambda function"
   vpc_id      = aws_vpc.main.id
 
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
   egress {
     from_port        = 0
     to_port          = 0
@@ -94,57 +105,93 @@ resource "aws_security_group" "lambda_sg" {
   }
 }
 
+resource "aws_security_group" "alb_sg" {
+  name        = "${var.project_name}-${var.environment}-alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  }
+}
+
 resource "aws_iam_role" "lambda_role" {
   name = "${var.project_name}-${var.environment}-lambda-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Service = "lambda.amazonaws.com"
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
       },
-      Action = "sts:AssumeRole"
-    }]
-  })
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
 }
 
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "${var.project_name}-${var.environment}-lambda-policy"
   role = aws_iam_role.lambda_role.id
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ],
-        Resource = "arn:aws:logs:*:*:*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+      ],
+      "Resource": "*"
+    }
+  ]
 }
+EOF
+}
+
 
 resource "aws_s3_bucket" "lambda_code_bucket" {
   bucket = "pankaj-devops-lambda-lambda-code-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
+  acl    = "private" # This will produce a deprecation warning, consider using aws_s3_bucket_acl resource
+
   tags = {
     Name = "${var.project_name}-${var.environment}-lambda-bucket"
   }
 }
+
 
 resource "aws_lambda_function" "lambda_function" {
   function_name    = "${var.project_name}-lambda-function"
@@ -154,6 +201,7 @@ resource "aws_lambda_function" "lambda_function" {
   timeout          = 120
   memory_size      = 128
 
+  # Specify the local zip file as the source code
   filename         = "./lambda.zip"
   source_code_hash = var.source_code_hash
 
@@ -161,4 +209,54 @@ resource "aws_lambda_function" "lambda_function" {
     subnet_ids         = [aws_subnet.public_1.id, aws_subnet.public_2.id]
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
+
+  # REMOVED: s3_bucket and s3_key attributes to resolve conflict
+}
+
+
+resource "aws_lb" "alb" {
+  name               = "${var.project_name}-${var.environment}-alb" # Used project_name and environment for uniqueness
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb"
+  }
+}
+
+
+resource "aws_lb_target_group" "lambda_tg" {
+  name        = "${var.project_name}-lambda-tg" # Used project_name for uniqueness
+  protocol    = "HTTP"
+  target_type = "lambda"
+  vpc_id      = aws_vpc.main.id # For VPC context, though Lambda TG doesn't use subnets/ports
+
+  # REMOVED: port = 80 as it's not applicable for target_type = "lambda"
+}
+
+resource "aws_lb_listener" "front_end" {
+  load_balancer_arn = aws_lb.alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    target_group_arn = aws_lb_target_group.lambda_tg.arn
+    type             = "forward"
+  }
+}
+
+
+resource "aws_lambda_permission" "allow_alb" {
+  statement_id  = "AllowExecutionFromALB"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda_function.function_name
+  principal     = "elasticloadbalancing.amazonaws.com"
+  source_arn    = aws_lb_listener.front_end.arn
+}
+
+
+output "alb_dns_name" {
+  value = aws_lb.alb.dns_name
 }
